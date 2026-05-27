@@ -418,13 +418,6 @@ project = project.replace("-Users-shunhamm-ghq-git-pepabo-com-hosting-", "")
 project = project.replace("-Users-shunhamm-", "")
 ```
 
-たとえば `~/dev/myorg/` 配下に集約してる人なら:
-
-```python
-project = project.replace("-Users-yourname-dev-myorg-", "")
-project = project.replace("-Users-yourname-", "")
-```
-
 `shunhamm` も自分の username に置き換えてください。
 
 ---
@@ -443,14 +436,6 @@ project = project.replace("-Users-yourname-", "")
 
 がそのまま見えるので、「これだ」と判別する精度がぐっと上がります。
 
-| 操作 | キー |
-|---|---|
-| 一覧を絞り込む | そのままタイプ（プロジェクト名 or 主題でマッチ） |
-| カーソル移動 | ↑ / ↓ |
-| preview をスクロール | `Ctrl+F` / `Ctrl+B` |
-| 復帰 | `Enter`（選択 → cwd に自動 cd → `claude --resume`） |
-| キャンセル | `Esc` |
-
 そのままタイプすると fzf のインクリメンタル検索が効くので、プロジェクト名や主題で一気に絞り込めます。
 
 ![インクリメンタル絞り込み。"Go" → "Tail" の順で title マッチさせている](/images/claude-code-session-browser/search.gif)
@@ -467,16 +452,6 @@ project = project.replace("-Users-yourname-", "")
 | プロジェクト名の色分け | ハッシュベース、同じプロジェクト名は必ず同じ色 |
 | 主題の前に `⏸` | 末尾がユーザー発話で終わってる「未応答セッション」 |
 
-### 一覧に出る「主題」（3列目）の正体
-
-3列目に出る "Postgresクエリパフォーマンスの分析" みたいな主題は `ai-title` レコードを拾っています。これは Claude Code 本体が会話履歴に自動付与するものです。フォールバック順は以下:
-
-1. `custom-title`（手動で付けたタイトル）
-2. `ai-title`（Claude が自動生成するタイトル）
-3. 最初のユーザーメッセージ（前置きシステムテキストや `<...>` 系を除外して整形）
-
-`ai-title` はセッションを少し進めれば自動で書き込まれるので、ほとんどの履歴で気の利いた主題が並びます。
-
 ---
 
 ## 過去メッセージまで含めて全文検索する
@@ -489,8 +464,6 @@ cc-sessions --grep "PR #1234"
 ```
 
 最近 500 セッションの jsonl の中身まで grep して、ヒットしたセッションだけを一覧化します。検索後も普通通り preview で内容確認 → Enter で復帰までの流れは同じ。
-
-`ai-title` が付いてない / 主題列だけだと思い出せない古いセッションを掘り起こすときに地味に効きます。
 
 ![cc-sessions -g "AWS" で全文検索。"Lambda コールドスタート対策" の1件にヒットして preview に内容が出ている](/images/claude-code-session-browser/grep.gif)
 
