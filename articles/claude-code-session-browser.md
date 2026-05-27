@@ -3,7 +3,7 @@ title: "Claude Code のセッション、消えてない。全プロジェクト
 emoji: "🔍"
 type: "tech"
 topics: ["claudecode", "ai", "zsh", "shell", "tips"]
-published: false
+published: true
 ---
 
 ## あなたも経験したことないですか？
@@ -23,6 +23,8 @@ PR レビュー、実装、本番DB調査、雑務、さらには「ちょっと
 違ったら別のワークツリーに移動して `/resume`、また履歴を一つずつ開く。
 
 これがけっこう辛い…😭
+
+おまけに、**ターミナルアプリが強制終了されることもある…**。タブをいい感じに配置して、そこにワークツリーやセッションをいい感じに並べて作り上げた作業環境が、まるごと消える。前日まで頭の中にあった「どのタブに何があったか」もろとも吹き飛んで、さらに分からなくなる（cmux 導入で多少マシになった）。
 
 そもそも結局見つからずに諦めるパターンもあって、「あの調査ログどこ行ったんだ」と心の中だけで唸ることになります。
 
@@ -87,16 +89,16 @@ Claude Code のセッション（会話履歴）は、起動時のカレント�
 |---|---|
 | 公開エントリ。fzfで選択 → cd → resume | `cc-sessions` |
 | 一覧データを生成（jsonl から ai-title, cwd, 最初のユーザーメッセージ抽出） | `_cc-sessions-list` |
-| 動画撮影用のダミーセッション生成 | `_cc-sessions-gen-demo` |
 
-以下を `.zshrc` に追加します（補助関数2つは少し長いので折りたたんでます）。
+以下を `.zshrc` に追加します（全部折りたたんでます。コピペでOK）。
+
+:::details メイン関数: `cc-sessions`（fzf 起動 → cd → resume）
 
 ```zsh
 # 全プロジェクトのClaudeセッション横断ブラウザ
 # 使い方:
 #   cc-sessions [件数(デフォルト50)]
 #   cc-sessions -g <pattern>     # 全 jsonl 全文検索してヒットしたものだけ表示
-#   cc-sessions --demo           # ダミーセッションで動作確認・撮影
 function cc-sessions() {
   if ! command -v fzf >/dev/null 2>&1; then
     echo "Error: fzf is required. Install with: brew install fzf" >&2
@@ -104,16 +106,13 @@ function cc-sessions() {
   fi
   local limit=50
   local grep_pattern=""
-  local demo_mode=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -g|--grep) shift; grep_pattern="${1:-}" ;;
-      --demo) demo_mode=1 ;;
       -h|--help)
         cat <<'EOF'
-Usage: cc-sessions [-g <pattern>] [--demo] [<件数>]
+Usage: cc-sessions [-g <pattern>] [<件数>]
   -g, --grep <pattern>   全セッションを全文検索してヒットしたものだけ表示
-  --demo                 ダミーセッションを表示(動画撮影/ブログサンプル用)
   <件数>                 表示件数(デフォルト 50、grep 時は 500)
 EOF
         return 0
@@ -122,11 +121,6 @@ EOF
     esac
     shift
   done
-
-  if [ -n "$demo_mode" ]; then
-    export CC_PROJECTS_ROOT="$HOME/.claude/projects-demo"
-    _cc-sessions-gen-demo "$CC_PROJECTS_ROOT"
-  fi
 
   local list
   if [ -n "$grep_pattern" ]; then
@@ -156,7 +150,7 @@ if len(parts) < 4:
     print("(invalid line)"); sys.exit(0)
 uuid = parts[3].strip()
 cwd = parts[4].strip() if len(parts) > 4 else ""
-proj_root = os.environ.get("CC_PROJECTS_ROOT") or os.path.expanduser("~/.claude/projects")
+proj_root = os.path.expanduser("~/.claude/projects")
 jsonl = None
 if os.path.isdir(proj_root):
     for d in os.listdir(proj_root):
@@ -248,7 +242,6 @@ except Exception as e:
           --prompt='session > ' --header="$fzf_header")
 
   unset CC_SESSIONS_PREVIEW_PY
-  [ -n "$demo_mode" ] && unset CC_PROJECTS_ROOT
 
   if [ -z "$selected" ]; then
     echo "キャンセルしました"
@@ -267,15 +260,16 @@ except Exception as e:
 }
 ```
 
+:::
+
 :::details 一覧データ生成: `_cc-sessions-list`（タイトル抽出・色付け・相対時刻）
 
 ```zsh
 function _cc-sessions-list() {
   local limit="${1:-50}"
   local pattern="${2:-}"
-  local projects_root="${CC_PROJECTS_ROOT:-$HOME/.claude/projects}"
   local file_list
-  file_list=$(find "$projects_root" -maxdepth 2 -name "*.jsonl" -not -path "*/subagents/*" \
+  file_list=$(find "$HOME/.claude/projects" -maxdepth 2 -name "*.jsonl" -not -path "*/subagents/*" \
     -exec ls -t {} + 2>/dev/null \
     | head -"$limit")
   [ -z "$file_list" ] && return 0
@@ -375,7 +369,7 @@ def matches_grep(path, pattern):
     except Exception: return False
 
 home = os.path.expanduser("~")
-projects_root = os.environ.get("CC_PROJECTS_ROOT") or os.path.join(home, ".claude/projects")
+projects_root = os.path.join(home, ".claude/projects")
 for raw_path in os.environ.get("CC_FILE_LIST", "").splitlines():
     path = raw_path.strip()
     if not path: continue
@@ -386,7 +380,6 @@ for raw_path in os.environ.get("CC_FILE_LIST", "").splitlines():
     # ↓ 自分のパス構成に合わせて調整(後述)
     project = project.replace("-Users-shunhamm-ghq-git-pepabo-com-hosting-", "")
     project = project.replace("-Users-shunhamm-", "")
-    project = project.replace("-demo-", "")
     if len(project) > 30: project = project[:29] + "…"
     mtime_raw = os.path.getmtime(path)
     age_sec = time.time() - mtime_raw
@@ -421,92 +414,6 @@ for raw_path in os.environ.get("CC_FILE_LIST", "").splitlines():
 
 :::
 
-:::details 動画撮影用のダミーセッション生成: `_cc-sessions-gen-demo`
-
-```zsh
-# 動画撮影/ブログサンプル用のダミーセッション10件を生成
-# 既に生成済みならスキップ。生成先: $1 (デフォルト ~/.claude/projects-demo)
-function _cc-sessions-gen-demo() {
-  local root="${1:-$HOME/.claude/projects-demo}"
-  if [ -d "$root" ] && [ -n "$(find "$root" -maxdepth 2 -name '*.jsonl' -print -quit 2>/dev/null)" ]; then
-    return 0
-  fi
-  mkdir -p "$root"
-  CC_DEMO_ROOT="$root" python3 -c '
-import os, json, time, datetime
-
-ROOT = os.environ["CC_DEMO_ROOT"]
-DEMOS = [
-    ("my-api", "Postgresクエリパフォーマンスの分析", [
-        ("user", "Postgresのクエリが遅い。explain analyze の見方教えて"),
-        ("assistant", "explain analyzeは実行計画と実行時間を両方見られる。各ノードの cost と actual time に注目"),
-        ("user", "じゃあとりあえず手元で走らせてみる"),
-        ("assistant", "OK。本番では BEGIN; ... ROLLBACK; で囲むのが安全"),
-    ], 300, False),
-    ("my-frontend", "Next.jsで Google OAuth 実装", [
-        ("user", "NextAuth.js を使った Google ログインを最小構成で"),
-        ("assistant", "NextAuth v5 なら auth.ts に GoogleProvider を1つ書くだけで動く"),
-    ], 3600, False),
-    ("my-cli", "Go CLI アプリ設計の相談", [
-        ("user", "Go で日記アプリの CLI を作りたい"),
-        ("assistant", "cobra か urfave/cli が定番。cobra-cli で雛形生成が楽"),
-    ], 10800, False),
-    ("my-blog", "Hugoテーマ自作の入門", [
-        ("user", "Hugoのテーマを自作したい。最小構成は？"),
-        ("assistant", "themes/<name>/layouts/_default/ に baseof, single, list の3つだけで動く"),
-    ], 86400, False),
-    ("my-script", "Pandas大量CSV結合の方針", [
-        ("user", "大量の CSV を Pandas で結合するベストプラクティスは？"),
-        ("assistant", "1GBクラスなら chunksize で分割。10GB なら polars か duckdb を検討"),
-    ], 172800, False),
-    ("my-api", "Redis pub/sub のスケール検証", [
-        ("user", "Redis の pub/sub で通知配信したい。何接続まで耐える？"),
-        ("assistant", "単体なら数万 sub までは普通に。永続化されないので Streams も検討"),
-    ], 259200, False),
-    ("my-frontend", "Tailwind Dark mode 設計", [
-        ("user", "Tailwind で Dark mode を CSS Variables ベースにしたい"),
-        ("assistant", "tailwind.config.js で darkMode: class、:root と .dark で変数切替"),
-    ], 432000, False),
-    ("my-cli", "Bubble Tea TUI 設計", [
-        ("user", "Bubble Tea でファイルブラウザ風 TUI を作りたい"),
-        ("assistant", "list bubbles を起点に、Update() で Selected Item を詳細ペインに反映"),
-        ("user", "ペインの分割はどう？"),
-    ], 864000, True),
-    ("my-blog", "GitHub Pagesデプロイの自動化", [
-        ("user", "github.io にデプロイする GitHub Actions の最小構成は？"),
-        ("assistant", "checkout → setup-hugo → build → upload-pages-artifact → deploy-pages の5ステップ"),
-    ], 1209600, False),
-    ("my-script", "Lambda コールドスタート対策", [
-        ("user", "AWS Lambda のコールドスタートを軽くする現実的な手は？"),
-        ("assistant", "SnapStart や ARM 化、依存最小化が現実的。Node なら esbuild bundle も効く"),
-    ], 2592000, False),
-]
-now = time.time()
-for idx, (proj, title, turns, offset, _last_is_user) in enumerate(DEMOS):
-    cwd = "/demo/" + proj
-    proj_dir = os.path.join(ROOT, "-demo-" + proj)
-    os.makedirs(proj_dir, exist_ok=True)
-    sess_id = "{:08d}-demo-demo-demo-{:012d}".format(idx + 1, idx + 1)
-    jsonl_path = os.path.join(proj_dir, sess_id + ".jsonl")
-    if os.path.exists(jsonl_path): continue
-    mtime = now - offset
-    start_time = mtime - len(turns) * 30
-    lines = []
-    for ti, (ttype, content) in enumerate(turns):
-        ts = datetime.datetime.fromtimestamp(start_time + ti * 30, tz=datetime.timezone.utc).isoformat().replace("+00:00", "Z")
-        msg = {"role": ttype, "content": [{"type": "text", "text": content}]}
-        if ttype == "assistant": msg["model"] = "claude-opus-4-7"
-        lines.append(json.dumps({"type": ttype, "cwd": cwd, "sessionId": sess_id, "message": msg, "timestamp": ts}, ensure_ascii=False))
-    lines.append(json.dumps({"type": "ai-title", "aiTitle": title, "sessionId": sess_id}, ensure_ascii=False))
-    with open(jsonl_path, "w") as f: f.write("\n".join(lines) + "\n")
-    os.utime(jsonl_path, (mtime, mtime))
-print("demo sessions generated under " + ROOT)
-'
-}
-```
-
-:::
-
 ### 自分の環境に合わせるには？
 
 `_cc-sessions-list` の Python 内に、プロジェクト名表示の前置 path を削る `replace` が並んでいます。**自分のパス構成に合わせて書き換えてください**。デフォルトは僕の環境（pepabo）向けです。
@@ -532,7 +439,7 @@ project = project.replace("-Users-yourname-", "")
 
 ターミナルで `cc-sessions` を叩くと、fzf がこんな2ペイン構成で起動します。
 
-![cc-sessions --demo の起動と一覧スクロール。カーソル移動に合わせて右ペインの preview がリアルタイムに切り替わる](/images/claude-code-session-browser/overview.gif)
+![cc-sessions の起動と一覧スクロール。カーソル移動に合わせて右ペインの preview がリアルタイムに切り替わる](/images/claude-code-session-browser/overview.gif)
 
 ポイントは右ペインの preview。選択中のセッションについて、
 
@@ -578,25 +485,6 @@ project = project.replace("-Users-yourname-", "")
 
 ---
 
-## 動画撮影/ブログ用のデモモード
-
-「便利だから紹介したい、でも自分のセッション一覧を画面録画したら会社のプロジェクト名や顧客名が映る」**問題**。  
-わかります。僕もこの記事を書くためにスクリーンショットを撮ろうとして即詰みました。
-
-`cc-sessions --demo` を叩くと、初回だけ `~/.claude/projects-demo/` に架空のダミーセッション10件を自動生成します。以降はそのダミーだけを表示するので、本物の `~/.claude/projects/` には一切触れません。
-
-```zsh
-cc-sessions --demo
-```
-
-ダミーは「Postgresクエリ最適化」「Next.js で Google OAuth 実装」みたいな完全に無害なテック相談です。`mtime` も `5分前` `1時間前` `3日前` `10日前` `30日前` と散らしてあります。これで相対時刻表示・dim 化・⏸ 未応答マークを **1画面で全部見せられる** ようになっています。
-
-ブログ用のスクショ、社内勉強会のスライド、Twitter 投稿の動画など、安心して使えます。
-
-ダミーは初回起動時にだけ生成されるので、2回目以降は即起動。再生成したい場合は `rm -rf ~/.claude/projects-demo` してから --demo を叩いてください。
-
----
-
 ## 過去メッセージまで含めて全文検索する
 
 「あの "k8s 移行" の話、どのセッションだっけ…」みたいなとき、`-g` で過去メッセージを含めた全文検索ができます。
@@ -610,7 +498,7 @@ cc-sessions --grep "PR #1234"
 
 `ai-title` が付いてない / 主題列だけだと思い出せない古いセッションを掘り起こすときに地味に効きます。
 
-![cc-sessions --demo -g "AWS" で全文検索。"Lambda コールドスタート対策" の1件にヒットして preview に内容が出ている](/images/claude-code-session-browser/grep.gif)
+![cc-sessions -g "AWS" で全文検索。"Lambda コールドスタート対策" の1件にヒットして preview に内容が出ている](/images/claude-code-session-browser/grep.gif)
 
 ---
 
@@ -649,7 +537,7 @@ peco 派の人は fzf 部分を peco に差し替えれば一覧は動きます�
 ## 「導入してみたい」と思った人へ
 
 「面白そうだけど、設定ファイルいじるのめんどくさいな…」と思った人。  
-朗報です。
+やらなくていいです。
 
 **この記事のURLを Claude Code に貼って「やっといて」と送るだけ**で、`.zshrc` への追記もキーバインド設定も全部やってくれる🪄
 
@@ -657,8 +545,6 @@ peco 派の人は fzf 部分を peco に差し替えれば一覧は動きます�
 自分の環境（パス構成や好みのキーバインド）に合わせて書き換えてくれるところまで含めて、勝手にやってくれる。
 
 コードを書くのも、環境を整えるのも、CC に任せる時代になってきました。
-
-> この記事が公開されたあとに試してみてください。
 
 ---
 
@@ -670,7 +556,6 @@ peco 派の人は fzf 部分を peco に差し替えれば一覧は動きます�
 | 別ディレクトリ・別ワークツリーのセッションを見たい | `cc-sessions` で全プロジェクト横断 |
 | 主題ではなく **過去のメッセージ内容** で検索したい | `cc-sessions -g "<キーワード>"` |
 | 「これだ」と確信してから復帰したい | preview ペインで CWD / メタ / 直近10ターンを確認 |
-| 機密情報なしで **ブログ/動画用のスクショ** を撮りたい | `cc-sessions --demo` |
 | さらに素早く呼び出したい | `Ctrl+X Ctrl+R` などキーバインドに割り当て |
 
 セッションは消えてない。棚が違うだけだった。  
