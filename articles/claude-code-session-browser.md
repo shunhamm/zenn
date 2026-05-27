@@ -4,6 +4,7 @@ emoji: "🔍"
 type: "tech"
 topics: ["claudecode", "ai", "zsh", "shell", "tips"]
 published: true
+publication_name: "pepabo"
 ---
 
 ## あなたも経験したことないですか？
